@@ -51,6 +51,16 @@ COMMENT ON TABLE storage_locations IS
 CREATE INDEX ON storage_locations(user_id);
 CREATE INDEX ON storage_locations(parent_id);
 
+-- Box-label resolution (decided 2026-06-18): the CollectionsScanner capture client stays UUID-free
+-- and offline — it records only a plain-text box label per scan. The Trove importer resolves that
+-- label to storage_location_id by UPSERTING a top-level storage_locations row on (user_id, name).
+-- This partial unique index makes that upsert idempotent across repeated/replayed imports while
+-- still allowing nested locations to reuse a name under different parents (parent_id IS NOT NULL).
+--   importer: INSERT ... (user_id, name) VALUES (...) ON CONFLICT (user_id, name)
+--             WHERE parent_id IS NULL DO UPDATE SET name = EXCLUDED.name RETURNING id;
+CREATE UNIQUE INDEX storage_locations_user_name_toplevel_uniq
+    ON storage_locations(user_id, name) WHERE parent_id IS NULL;
+
 
 -- =============================================================================
 -- PARADIGM 1: INDIVIDUAL ITEMS
@@ -76,9 +86,19 @@ CREATE TABLE items (
     user_id             UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 
     -- Identity
-    collection_type     TEXT NOT NULL,  -- 'print_book' | 'ebook' | 'film' | 'game'
-                                        --   | 'lego' | 'plushie' | 'nicky_nack'
-                                        --   | 'home_inventory' | …
+    collection_type     TEXT NOT NULL,  -- 'print_books' | 'ebooks' | 'films' | 'games'
+                                        --   | 'lego' | 'plushies' | 'nicky_nacks'
+                                        --   | 'home_inventory' | 'board_games' | 'puzzles'
+                                        -- Values are PLURAL: the extension table for a type is
+                                        --   ('item_' || collection_type), e.g. 'print_books' →
+                                        --   item_print_books, 'films' → item_films. This also
+                                        --   matches the CollectionsScanner capture client's
+                                        --   `collection` field, so export → import needs no remap.
+                                        -- 'board_games' and 'puzzles' (added 2026-06-18) are valid
+                                        --   collection types with NO extension table yet — the core
+                                        --   item fields suffice for move-time capture. Add
+                                        --   item_board_games / item_puzzles later if/when
+                                        --   type-specific fields are needed.
     title               TEXT NOT NULL,
     subtitle            TEXT,
     series_title        TEXT,

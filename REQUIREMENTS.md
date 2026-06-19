@@ -1,5 +1,9 @@
 # trove-os — Requirements & Context
 
+> **Status (2026-06-19): merged into [`README.md`](./README.md), which is now canonical.**
+> This file is kept for history. Where it conflicts with the README, the schema, or the
+> CollectionsScanner design docs, those win.
+
 > Known immediate task: **grab the architecture document and put it in the README.** Trove is among the better-specified modules — the architecture doc and completed PostgreSQL schema win over anything here.
 
 ## Purpose
